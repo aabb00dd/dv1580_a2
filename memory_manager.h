@@ -5,6 +5,13 @@
 #include <stdlib.h>
 #include <string.h>
 
+// Block structure for memory management
+typedef struct Block {
+    size_t size_of_block;           // Size of the block
+    int is_free;                    // Block free status: 1 if free, 0 if allocated
+    struct Block* next_block;       // Pointer to the next block
+} Block;
+
 // Helps C++ compilers to handle C header files
 #ifdef __cplusplus
 extern "C"
