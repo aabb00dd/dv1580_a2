@@ -13,7 +13,7 @@ static Block *free_list = NULL;     // Pointer to the list of free blocks
  */
 void mem_init(size_t size) 
 {
-    memory_pool = (char*)malloc(size * sizeof(Block)); // Allocate memory for the pool
+    memory_pool = (char*)malloc(size); // Allocate memory for the pool
 
     // Exit if memory allocation fails
     if (!memory_pool) 
