@@ -2,6 +2,8 @@
 #define MEMORY_MANAGER_H
 
 #include <stddef.h> // For size_t
+#include <stdlib.h>
+#include <string.h>
 
 // Helps C++ compilers to handle C header files
 #ifdef __cplusplus
