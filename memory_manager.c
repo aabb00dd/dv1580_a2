@@ -63,11 +63,6 @@ void* mem_alloc(size_t size)
 
             current_block->is_free = 0; // Mark as not free
 
-            // Link the previous block to the next block if there is one.
-            if (prev_block) prev_block->next_block = current_block->next_block;
-            // If no previous block, this becomes the new head of the free list.
-            else free_list = current_block->next_block;
-
             // Return a pointer to the allocated memory block
             return (char*)current_block + sizeof(Block);
         }
