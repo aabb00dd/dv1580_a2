@@ -44,60 +44,40 @@ void* mem_alloc(size_t size)
     // Pointers to traverse and track the free list
     Block *current_block = free_list, *prev_block = NULL;
 
-    // Traverse the free list to find a suitable block
+    // Find a free block that fits the requested size
     while (current_block) 
     {
-        // Check if the current block is free
-        if (current_block->is_free) 
+        // Check if the current_block block is free and can accommodate the requested size.
+        if (current_block->is_free && current_block->size_of_block >= size) 
         {
-            // Try coalescing adjacent free blocks before checking for allocation
-            Block *next_block = current_block->next_block;
-            while (next_block && next_block->is_free) 
+            // If the current_block block is larger than needed, split it into two blocks.
+            if (current_block->size_of_block > size) 
             {
-                // Coalesce adjacent free blocks
-                current_block->size_of_block += sizeof(Block) + next_block->size_of_block;
-                current_block->next_block = next_block->next_block;
-                next_block = next_block->next_block;
+                Block *new_block = (Block*)((char*)current_block + sizeof(Block) + size); // Create a new block after the allocated block.
+                new_block->size_of_block = current_block->size_of_block - size;           // Set size of the new block.
+                new_block->is_free = 1;                                                   // Mark as free
+                new_block->next_block = current_block->next_block;                        // Link the new block to the next one in the list.
+                current_block->size_of_block = size;                                      // Adjust the current block to the requested size.
+                current_block->next_block = new_block;                                    // Link the current block to the newly created one.
             }
 
-            // After coalescing, check if the current block can accommodate the requested size
-            if (current_block->size_of_block >= size + sizeof(Block)) 
-            {
-                // If the current block is larger than needed, split it into two blocks
-                if (current_block->size_of_block > size) 
-                {
-                    Block *new_block = (Block*)((char*)current_block + sizeof(Block) + size); // Create a new block after the allocated block
-                    new_block->size_of_block = current_block->size_of_block - size; // Adjust new block size
-                    new_block->is_free = 1; // Mark the new block as free
-                    new_block->next_block = current_block->next_block; // Link the new block to the next one
-                    current_block->next_block = new_block; // Link current block to the new block
-                    current_block->size_of_block = size; // Adjust the size of the current block
-                }
+            current_block->is_free = 0; // Mark as not free
 
-                current_block->is_free = 0; // Mark the current block as allocated
+            // Link the previous block to the next block if there is one.
+            if (prev_block) prev_block->next_block = current_block->next_block;
+            // If no previous block, this becomes the new head of the free list.
+            else free_list = current_block->next_block;
 
-                // If this block is the head of the free list, update the free list head
-                if (prev_block) 
-                {
-                    prev_block->next_block = current_block->next_block;
-                } 
-                else 
-                {
-                    free_list = current_block->next_block;
-                }
-
-                // Return a pointer to the allocated memory block
-                return (char*)current_block + sizeof(Block);
-            }
+            // Return a pointer to the allocated memory block
+            return (char*)current_block + sizeof(Block);
         }
 
-        // Move to the next block in the free list
+        // Move to the next block
         prev_block = current_block;
         current_block = current_block->next_block;
     }
 
-    // No suitable block found
-    return NULL;
+    return NULL; // No suitable block found
 }
 
 
