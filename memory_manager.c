@@ -1,8 +1,10 @@
+
 #include "memory_manager.h"
 
 
 static char *memory_pool = NULL;    // Pointer to the memory pool
 static Block *free_list = NULL;     // Pointer to the list of free blocks
+static size_t memory_pool_size = 0; // Size of the memory pool
 
 
 /*
@@ -20,6 +22,8 @@ void mem_init(size_t size)
     {
         exit(EXIT_FAILURE);
     }
+
+	memory_pool_size = size; // Track the size of the memory pool
 
     // Initialize the free block
     free_list = (Block*)memory_pool; // Set the free list to the start of the pool
@@ -94,7 +98,7 @@ void mem_free(void* block)
     Block* block_to_free = (Block*)((char*)block - sizeof(Block));
 
     // Attempted to free an already freed block
-    if (block_to_free->is_free || block_to_free < (Block*)memory_pool || block_to_free >= (Block*)((char*)memory_pool + pool_size)) 
+    if (block_to_free->is_free || block_to_free < (Block*)memory_pool || block_to_free >= (Block*)((char*)memory_pool + memory_pool_size)) 
     {
         return; // Either already free or block is out of pool bounds
     }
