@@ -44,28 +44,12 @@ void mem_init(size_t size)
  */
 void* mem_alloc(size_t size) 
 {
-    Block *current_block = free_list, *prev_block = NULL;
-    // If size is zero, return the first available address in the free list
-    if (size == 0) 
-    {
-        // Traverse the free list to find the first available free block
-        while (current_block) 
-        {
-            if (current_block->is_free) 
-            {
-                pthread_mutex_unlock(&memory_lock); // Unlock the memory manager
-                
-                // Return a pointer to the first available block
-                return (char*)current_block + sizeof(Block);
-            }
-            current_block = current_block->next_block;
-        }
-
-        pthread_mutex_unlock(&memory_lock); // Unlock if no suitable block is found
-        return NULL; // No available block found
-    }
+    if (size == 0) return NULL;    // Requested size is zero
 
     pthread_mutex_lock(&memory_lock); // Lock the memory manager
+
+    // Pointers to traverse and track the free list
+    Block *current_block = free_list, *prev_block = NULL;
 
     // Find a free block that fits the requested size
     while (current_block) 
@@ -76,7 +60,7 @@ void* mem_alloc(size_t size)
             // If the current_block block is larger than needed, split it into two blocks.
             if (current_block->size_of_block > size) 
             {
-                Block *new_block = (Block*)((char*)current_block + size + sizeof(Block)); // Create a new block after the allocated block.
+                Block *new_block = (Block*)((char*)current_block + sizeof(Block) + size); // Create a new block after the allocated block.
                 new_block->size_of_block = current_block->size_of_block - size;           // Set size of the new block.
                 new_block->is_free = 1;                                                   // Mark as free
                 new_block->next_block = current_block->next_block;                        // Link the new block to the next one in the list.
@@ -115,7 +99,7 @@ void mem_free(void* block)
 {
     if (!block) return;    // Attempted to free a NULL pointer
 
-    pthread_mutex_lock(&memory_lock); // Unlock if already free
+    pthread_mutex_unlock(&memory_lock); // Unlock if already free
  
     // Get the block to free
     Block* block_to_free = (Block*)((char*)block - sizeof(Block));
@@ -218,5 +202,8 @@ void mem_deinit()
     memory_pool = NULL; // Reset the memory pool pointer
     free_list = NULL;   // Reset the free list pointer
 
-    pthread_mutex_destroy(&memory_lock); // Destroy the mutex
+    pthread_mutex_unlock(&memory_lock); // Unlock before destroying the mutex
+
+    // Destroy the mutex
+    pthread_mutex_destroy(&memory_lock);
 }
