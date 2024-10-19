@@ -35,11 +35,11 @@ void* mem_alloc(size_t size)
     {
         if (current_block->is_free && current_block->size_of_block >= size) 
         {
-            if (current_block->size_of_block >= size + sizeof(Block) + 8)  // Split only if the remaining space is large enough
+            if (current_block->size_of_block >= size + 8)  // Split only if the remaining space is large enough
             {
                 // Create a new block after the allocated block
                 Block *new_block = (Block*)((char*)current_block + sizeof(Block) + size);
-                new_block->size_of_block = current_block->size_of_block - size - sizeof(Block);
+                new_block->size_of_block = current_block->size_of_block - size;
                 new_block->is_free = 1;
                 new_block->next_block = current_block->next_block;
 
