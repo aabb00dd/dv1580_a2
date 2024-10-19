@@ -44,7 +44,25 @@ void mem_init(size_t size)
  */
 void* mem_alloc(size_t size) 
 {
-    if (size == 0) return NULL;    // Requested size is zero
+    // If size is zero, return the first available address in the free list
+    if (size == 0) 
+    {
+        // Traverse the free list to find the first available free block
+        while (current_block) 
+        {
+            if (current_block->is_free) 
+            {
+                pthread_mutex_unlock(&memory_lock); // Unlock the memory manager
+                
+                // Return a pointer to the first available block
+                return (char*)current_block + sizeof(Block);
+            }
+            current_block = current_block->next_block;
+        }
+
+        pthread_mutex_unlock(&memory_lock); // Unlock if no suitable block is found
+        return NULL; // No available block found
+    }
 
     pthread_mutex_lock(&memory_lock); // Lock the memory manager
 
