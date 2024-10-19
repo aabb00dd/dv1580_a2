@@ -43,6 +43,8 @@ void* mem_alloc(size_t size)
 {
     if (size == 0) return NULL;    // Requested size is zero
 
+    size = ALIGN(size);   // Ensure the total memory pool is aligned
+
     // Pointers to traverse and track the free list
     Block *current_block = free_list, *prev_block = NULL;
 
