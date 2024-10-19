@@ -1,5 +1,4 @@
 #include "memory_manager.h"
-#include <pthread.h>
 
 
 static char *memory_pool = NULL;    // Pointer to the memory pool
