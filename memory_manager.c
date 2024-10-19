@@ -4,7 +4,6 @@
 static char *memory_pool = NULL;    // Pointer to the memory pool
 static Block *free_list = NULL;     // Pointer to the list of free blocks
 
-#define ALIGN(size) (((size) + (sizeof(void*) - 1)) & ~(sizeof(void*) - 1))
 
 /*
  Initializes the memory manager by allocating a pool of memory.
@@ -14,7 +13,6 @@ static Block *free_list = NULL;     // Pointer to the list of free blocks
  */
 void mem_init(size_t size) 
 {
-    size = ALIGN(size);   // Ensure the total memory pool is aligned
     memory_pool = (char*)malloc(size); // Allocate memory for the pool
 
     // Exit if memory allocation fails
@@ -42,8 +40,6 @@ void mem_init(size_t size)
 void* mem_alloc(size_t size) 
 {
     if (size == 0) return NULL;    // Requested size is zero
-
-    size = ALIGN(size);   // Ensure the total memory pool is aligned
 
     // Pointers to traverse and track the free list
     Block *current_block = free_list, *prev_block = NULL;
@@ -92,48 +88,46 @@ void* mem_alloc(size_t size)
  */
 void mem_free(void* block) 
 {
-    if (!block) return;
+    if (!block) return;    // Attempted to free a NULL pointer
 
+    // Get the block to free
     Block* block_to_free = (Block*)((char*)block - sizeof(Block));
 
+    // Attempted to free an already freed block
     if (block_to_free->is_free) return;
 
+    // Mark the block as free
     block_to_free->is_free = 1;
+    // Pointers to traverse and track the free list
+    Block *current_block = free_list, *prev_block = NULL;
 
-    Block *current_block = free_list;
-
-    // Try to merge with next block
-    if (block_to_free->next_block && block_to_free->next_block->is_free)
+    // Find the correct position to insert the freed block in the free list
+    while (current_block && current_block < block_to_free) 
     {
-        block_to_free->size_of_block += sizeof(Block) + block_to_free->next_block->size_of_block;
-        block_to_free->next_block = block_to_free->next_block->next_block;
+        prev_block = current_block;                     // Track the previous block
+        current_block = current_block->next_block;      // Move to the next block
     }
 
-    // Check if the free block is before the free_list and update free_list
-    if (block_to_free < free_list) 
-    {
-        block_to_free->next_block = free_list;
-        free_list = block_to_free;
-    } 
-    else 
-    {
-        // Traverse free list to insert the freed block
-        while (current_block && current_block->next_block < block_to_free)
-        {
-            current_block = current_block->next_block;
-        }
+    // Insert the freed block into the free list
+    block_to_free->next_block = current_block;
 
-        // Insert into the free list
-        block_to_free->next_block = current_block->next_block;
-        current_block->next_block = block_to_free;
+    // Link the previous block to the freed block
+    if (prev_block) prev_block->next_block = block_to_free;
+    // If no previous block, this becomes the new head of the free list.
+    else free_list = block_to_free;
+
+    // Merge with the next block if they are contiguous
+    if (block_to_free->next_block && (char*)block_to_free + sizeof(Block) + block_to_free->size_of_block == (char*)block_to_free->next_block) 
+    {
+        block_to_free->size_of_block += sizeof(Block) + block_to_free->next_block->size_of_block;              // Merge the two blocks
+        block_to_free->next_block = block_to_free->next_block->next_block;                                     // Update the next pointer
     }
 
     // Merge with the previous block if they are contiguous
-    if (current_block && current_block->is_free && 
-        (char*)current_block + sizeof(Block) + current_block->size_of_block == (char*)block_to_free)
+    if (prev_block && (char*)prev_block + sizeof(Block) + prev_block->size_of_block == (char*)block_to_free) 
     {
-        current_block->size_of_block += sizeof(Block) + block_to_free->size_of_block;
-        current_block->next_block = block_to_free->next_block;
+        prev_block->size_of_block += sizeof(Block) + block_to_free->size_of_block;              // Merge the two blocks
+        prev_block->next_block = block_to_free->next_block;                                     // Update the next pointer
     }
 }
 
@@ -147,8 +141,6 @@ void mem_free(void* block)
 void* mem_resize(void* block, size_t size) 
 {
     if (!block) return mem_alloc(size);    // If block is NULL, allocate new
-
-    size = ALIGN(size);
 
     // If size is zero, free the block
     if (size == 0) 
