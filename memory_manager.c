@@ -44,7 +44,10 @@ void mem_init(size_t size)
  */
 void* mem_alloc(size_t size) 
 {
-    if (size == 0) return NULL;    // Requested size is zero
+    if (size == 0) {
+        static char dummy_block[1];  // A small dummy block that is always available
+        return dummy_block;          // Return the address of this dummy block
+    }
 
     pthread_mutex_lock(&memory_lock); // Lock the memory manager
 
