@@ -33,7 +33,7 @@ void* mem_alloc(size_t size)
     if (size == 0) return NULL;    // Return NULL if requested size is zero
 
     // Traverse the free list to find a suitable block
-    Block *current_block = free_list, *prev_block = NULL;
+    Block *current_block = free_list;
 
     while (current_block) 
     {
@@ -56,7 +56,6 @@ void* mem_alloc(size_t size)
             return (char*)current_block + sizeof(Block);
         }
 
-        prev_block = current_block;       // Move to the next block
         current_block = current_block->next_block;
     }
 
@@ -113,6 +112,36 @@ void mem_free(void* block)
         prev_block->next_block = block_to_free->next_block;
     }
 }
+
+
+void* mem_resize(void* block, size_t size) 
+{
+    if (!block) return mem_alloc(size);    // If block is NULL, allocate new
+
+    // If size is zero, free the block
+    if (size == 0) 
+    {
+        mem_free(block);
+        return NULL;
+    }
+
+    // Get the old block and check if it's big enough
+    Block* old_block = (Block*)((char*)block - sizeof(Block));
+    if (old_block->size_of_block >= size) return block;
+
+    // Allocate a new block of the requested size
+    void* new_block = mem_alloc(size);
+
+    // Copy the old data to the new block and free the old block
+    if (new_block) 
+    {
+        memcpy(new_block, block, old_block->size_of_block);  // Copy old data to new block
+        mem_free(block);                                     // Free the old block
+    }
+    
+    return new_block; // Return the new block
+}
+
 
 /*
  Deinitializes the memory manager and frees the memory pool.
