@@ -58,9 +58,9 @@ void* mem_alloc(size_t size)
         if (current_block->is_free && current_block->size_of_block >= size) 
         {
             // If the current_block block is larger than needed, split it into two blocks.
-            if (current_block->size_of_block > size + sizeof(Block)) 
+            if (current_block->size_of_block > size) 
             {
-                Block *new_block = (Block*)((char*)current_block + size); // Create a new block after the allocated block.
+                Block *new_block = (Block*)((char*)current_block + size + sizeof(Block)); // Create a new block after the allocated block.
                 new_block->size_of_block = current_block->size_of_block - size;           // Set size of the new block.
                 new_block->is_free = 1;                                                   // Mark as free
                 new_block->next_block = current_block->next_block;                        // Link the new block to the next one in the list.
