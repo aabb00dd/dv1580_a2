@@ -1,8 +1,10 @@
 #include "memory_manager.h"
+#include <pthread.h>
 
 
 static char *memory_pool = NULL;    // Pointer to the memory pool
 static Block *free_list = NULL;     // Pointer to the list of free blocks
+static pthread_mutex_t memory_lock; // Mutex for synchronizing memory operations
 
 
 /*
@@ -26,6 +28,9 @@ void mem_init(size_t size)
     free_list->size_of_block = size; // Entire pool size
     free_list->is_free = 1;          // Mark as free
     free_list->next_block = NULL;    // No next block
+
+    // Initialize the mutex
+    pthread_mutex_init(&memory_lock, NULL);
 }
 
 
@@ -40,6 +45,8 @@ void mem_init(size_t size)
 void* mem_alloc(size_t size) 
 {
     if (size == 0) return NULL;    // Requested size is zero
+
+    pthread_mutex_lock(&memory_lock); // Lock the memory manager
 
     // Pointers to traverse and track the free list
     Block *current_block = free_list, *prev_block = NULL;
@@ -68,6 +75,8 @@ void* mem_alloc(size_t size)
             // If no previous block, this becomes the new head of the free list.
             else free_list = current_block->next_block;
 
+            pthread_mutex_unlock(&memory_lock); // Unlock the memory manager
+         
             // Return a pointer to the allocated memory block
             return (char*)current_block + sizeof(Block);
         }
@@ -76,7 +85,7 @@ void* mem_alloc(size_t size)
         prev_block = current_block;
         current_block = current_block->next_block;
     }
-
+    pthread_mutex_unlock(&memory_lock); // Unlock if no suitable block is found
     return NULL; // No suitable block found
 }
 
@@ -90,11 +99,16 @@ void mem_free(void* block)
 {
     if (!block) return;    // Attempted to free a NULL pointer
 
+    pthread_mutex_unlock(&memory_lock); // Unlock if already free
+ 
     // Get the block to free
     Block* block_to_free = (Block*)((char*)block - sizeof(Block));
 
-    // Attempted to free an already freed block
-    if (block_to_free->is_free) return;
+    if (block_to_free->is_free) 
+    {
+        pthread_mutex_unlock(&memory_lock); // Unlock if already free
+        return;    // Attempted to free an already freed block
+    }
 
     // Mark the block as free
     block_to_free->is_free = 1;
@@ -129,6 +143,7 @@ void mem_free(void* block)
         prev_block->size_of_block += sizeof(Block) + block_to_free->size_of_block;              // Merge the two blocks
         prev_block->next_block = block_to_free->next_block;                                     // Update the next pointer
     }
+    pthread_mutex_unlock(&memory_lock); // Unlock the memory manager
 }
 
 
@@ -149,10 +164,16 @@ void* mem_resize(void* block, size_t size)
         return NULL;
     }
 
+    pthread_mutex_lock(&memory_lock); // Lock the memory manager
+
     // Get the old block and check if it's big enough
     Block* old_block = (Block*)((char*)block - sizeof(Block));
-    if (old_block->size_of_block >= size) return block;
-
+    if (old_block->size_of_block >= size) 
+    {
+        pthread_mutex_unlock(&memory_lock); // Unlock if no resizing is needed
+        return block;
+    }
+ 
     // Allocate a new block of the requested size
     void* new_block = mem_alloc(size);
 
@@ -162,7 +183,9 @@ void* mem_resize(void* block, size_t size)
         memcpy(new_block, block, old_block->size_of_block);  // Copy old data to new block
         mem_free(block);                                     // Free the old block
     }
-    
+
+    pthread_mutex_unlock(&memory_lock); // Unlock the memory manager
+ 
     return new_block; // Return the new block
 }
 
@@ -173,7 +196,14 @@ void* mem_resize(void* block, size_t size)
  */
 void mem_deinit() 
 {
+    pthread_mutex_lock(&memory_lock); // Lock the memory manager
+ 
     free(memory_pool);  // Free the memory pool
     memory_pool = NULL; // Reset the memory pool pointer
     free_list = NULL;   // Reset the free list pointer
+
+    pthread_mutex_unlock(&memory_lock); // Unlock before destroying the mutex
+
+    // Destroy the mutex
+    pthread_mutex_destroy(&memory_lock);
 }
