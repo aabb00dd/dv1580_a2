@@ -99,7 +99,7 @@ void mem_free(void* block)
 {
     if (!block) return;    // Attempted to free a NULL pointer
 
-    pthread_mutex_unlock(&memory_lock); // Unlock if already free
+    pthread_mutex_lock(&memory_lock); // Unlock if already free
  
     // Get the block to free
     Block* block_to_free = (Block*)((char*)block - sizeof(Block));
@@ -202,8 +202,5 @@ void mem_deinit()
     memory_pool = NULL; // Reset the memory pool pointer
     free_list = NULL;   // Reset the free list pointer
 
-    pthread_mutex_unlock(&memory_lock); // Unlock before destroying the mutex
-
-    // Destroy the mutex
-    pthread_mutex_destroy(&memory_lock);
+    pthread_mutex_destroy(&memory_lock); // Destroy the mutex
 }
