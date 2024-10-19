@@ -46,6 +46,8 @@ void* mem_alloc(size_t size)
 {
     if (size == 0) return NULL;    // Requested size is zero
 
+    size = (size + sizeof(Block) - 1) & ~(sizeof(Block) - 1);
+
     pthread_mutex_lock(&memory_lock); // Lock the memory manager
 
     // Pointers to traverse and track the free list
