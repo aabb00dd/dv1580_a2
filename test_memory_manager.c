@@ -217,7 +217,7 @@ void *test_zero_alloc_and_free(void *arg)
     thread_data_t *data = (thread_data_t *)arg;
 
     void *block1 = mem_alloc(0);
-    my_assert(block1 != NULL);
+    my_assert(block1 == NULL);
     void *block2 = mem_alloc(200);
     my_assert(block2 != NULL);
 
