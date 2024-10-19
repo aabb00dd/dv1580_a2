@@ -94,7 +94,10 @@ void mem_free(void* block)
     Block* block_to_free = (Block*)((char*)block - sizeof(Block));
 
     // Attempted to free an already freed block
-    if (block_to_free->is_free) return;
+    if (block_to_free->is_free || block_to_free < (Block*)memory_pool || block_to_free >= (Block*)((char*)memory_pool + pool_size)) 
+    {
+        return; // Either already free or block is out of pool bounds
+    }
 
     // Mark the block as free
     block_to_free->is_free = 1;
