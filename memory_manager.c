@@ -44,8 +44,20 @@ void* mem_alloc(size_t size)
 
     if (size == 0)
     {
-        pthread_mutex_unlock(&memory_lock); // Unlock if size is zero
-        return;    // Requested size is zero
+        // For zero-size allocation, return the first free block's data pointer
+        Block *current_block = free_list;
+        while (current_block) 
+        {
+            if (current_block->is_free) 
+            {
+                pthread_mutex_unlock(&memory_lock);
+                return current_block->data;
+            }
+            current_block = current_block->next_block;
+        }
+        // If no free block found, return NULL
+        pthread_mutex_unlock(&memory_lock);
+        return NULL;
     }
 
     // Pointers to traverse and track the free list
@@ -110,35 +122,49 @@ void mem_free(void* block)
     Block *block_to_free = free_list;
     Block *prev_block = NULL;
 
-    while (block_to_free && block_to_free->data != block) 
+    while (block_to_free) 
     {
+        if (block_to_free->data == block) 
+        {
+            if (block_to_free->is_free) 
+            {
+                pthread_mutex_unlock(&memory_lock);
+                return; // Block is already free
+            }
+
+            block_to_free->is_free = 1;
+
+            // Merge with next block if it's free
+            if (block_to_free->next_block && block_to_free->next_block->is_free) 
+            {
+                block_to_free->size_of_block += sizeof(Block) + block_to_free->next_block->size_of_block;
+                block_to_free->next_block = block_to_free->next_block->next_block;
+            }
+
+            // Merge with previous block if it's free
+            if (prev_block && prev_block->is_free) 
+            {
+                prev_block->size_of_block += sizeof(Block) + block_to_free->size_of_block;
+                prev_block->next_block = block_to_free->next_block;
+            } 
+            else 
+            {
+                // If not merged with previous, ensure this block is in the free list
+                block_to_free->next_block = free_list;
+                free_list = block_to_free;
+            }
+
+            pthread_mutex_unlock(&memory_lock);
+            return;
+        }
+
         prev_block = block_to_free;
         block_to_free = block_to_free->next_block;
     }
 
-    if (!block_to_free || block_to_free->is_free) 
-    {
-        pthread_mutex_unlock(&memory_lock);
-        return;
-    }
-
-    // Mark the block as free
-    block_to_free->is_free = 1;
-
-    // Merge with the next block if they are contiguous
-    if (block_to_free->next_block && (char*)block_to_free + sizeof(Block) + block_to_free->size_of_block == (char*)block_to_free->next_block) 
-    {
-        block_to_free->size_of_block += sizeof(Block) + block_to_free->next_block->size_of_block;              // Merge the two blocks
-        block_to_free->next_block = block_to_free->next_block->next_block;                                     // Update the next pointer
-    }
-
-    // Merge with the previous block if they are contiguous
-    if (prev_block && (char*)prev_block + sizeof(Block) + prev_block->size_of_block == (char*)block_to_free) 
-    {
-        prev_block->size_of_block += sizeof(Block) + block_to_free->size_of_block;              // Merge the two blocks
-        prev_block->next_block = block_to_free->next_block;                                     // Update the next pointer
-    }
-    pthread_mutex_unlock(&memory_lock); // Unlock the memory manager
+    // If we get here, the block was not found
+    pthread_mutex_unlock(&memory_lock);
+    // Consider logging an error here
 }
 
 
@@ -150,18 +176,28 @@ void mem_free(void* block)
  */
 void* mem_resize(void* block, size_t size) 
 {
-    if (!block) return mem_alloc(size);    // If block is NULL, allocate new
+    pthread_mutex_lock(&memory_lock);
 
-    // If size is zero, free the block
+    if (!block) {
+        void* result = mem_alloc(size);
+        pthread_mutex_unlock(&memory_lock);
+        return result;
+    }
+
     if (size == 0) 
     {
         mem_free(block);
+        pthread_mutex_unlock(&memory_lock);
         return NULL;
     }
 
     // Get the old block and check if it's big enough
     Block* old_block = (Block*)((char*)block - sizeof(Block));
-    if (old_block->size_of_block >= size) return block;
+
+    if (old_block->size_of_block >= size) {
+        pthread_mutex_unlock(&memory_lock);
+        return block;
+    }
 
     // Allocate a new block of the requested size
     void* new_block = mem_alloc(size);
@@ -173,6 +209,7 @@ void* mem_resize(void* block, size_t size)
         mem_free(block);                                     // Free the old block
     }
     
+    pthread_mutex_unlock(&memory_lock);
     return new_block; // Return the new block
 }
 
