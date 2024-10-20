@@ -44,7 +44,7 @@ void mem_init(size_t size)
  */
 void* mem_alloc(size_t size) 
 {
-    if (size == 0) return NULL;    // Requested size is zero
+    if (size == 0) return free_list;    // Requested size is zero
 
     pthread_mutex_lock(&memory_lock); // Lock the memory manager
 
