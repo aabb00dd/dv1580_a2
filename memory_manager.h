@@ -11,6 +11,7 @@ typedef struct Block {
     size_t size_of_block;           // Size of the block
     int is_free;                    // Block free status: 1 if free, 0 if allocated
     struct Block* next_block;       // Pointer to the next block
+    char* data;                    // Pointer to the data in the block
 } Block;
 
 // Helps C++ compilers to handle C header files
