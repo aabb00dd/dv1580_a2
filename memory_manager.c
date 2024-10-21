@@ -1,14 +1,16 @@
 #include "memory_manager.h"
 
+
 static char *memory_pool = NULL;    
 static char *header_pool = NULL;      
 static Block *free_list = NULL;      
 static pthread_mutex_t memory_lock = PTHREAD_MUTEX_INITIALIZER;
 
+
 void mem_init(size_t size) 
 {
     memory_pool = (char*)malloc(size); 
-    header_pool = (char*)malloc(size * 10000); 
+    header_pool = (char*)malloc(size * sizeof(Block)); 
 
     if (!memory_pool || !header_pool) 
     {
@@ -22,9 +24,11 @@ void mem_init(size_t size)
     free_list->data = memory_pool;     
 }
 
+
 void* mem_alloc(size_t size) 
 {
     pthread_mutex_lock(&memory_lock);
+
 
     if (!memory_pool || !header_pool)
     {
@@ -39,8 +43,9 @@ void* mem_alloc(size_t size)
         {
             if (current_block->is_free) 
             {
+                void *result = current_block->data;
                 pthread_mutex_unlock(&memory_lock);
-                return current_block->data;
+                return result;
             }
             current_block = current_block->next_block;
         }
@@ -48,37 +53,48 @@ void* mem_alloc(size_t size)
         return NULL;
     }
 
-    Block *current_block = free_list, *prev_block = NULL;
+    Block *current_block = free_list;
+    Block *best_fit = NULL;
+    Block *prev_best = NULL;
+    Block *prev = NULL;
 
     while (current_block) 
     {
         if (current_block->is_free && current_block->size_of_block >= size) 
         {
-            if (current_block->size_of_block > size + sizeof(Block)) 
+            if (!best_fit || current_block->size_of_block < best_fit->size_of_block) 
             {
-                Block *new_block = (Block*)((char*)current_block + sizeof(Block));
-                new_block->size_of_block = current_block->size_of_block - size;        
-                new_block->is_free = 1;                                            
-                new_block->next_block = current_block->next_block;               
-                new_block->data = current_block->data + size;                  
-                
-                current_block->size_of_block = size;                 
-                current_block->next_block = new_block;                     
+                best_fit = current_block;
+                prev_best = prev;
             }
+        }
+        prev = current_block;
+        current_block = current_block->next_block;
+    }
 
-            current_block->is_free = 0;
+    if (best_fit) 
+    {
+        if (best_fit->size_of_block > size + sizeof(Block)) 
+        {
+            Block *new_block = (Block*)((char*)best_fit + sizeof(Block));
+            new_block->size_of_block = best_fit->size_of_block - size;
+            new_block->is_free = 1;
+            new_block->next_block = best_fit->next_block;
+            new_block->data = best_fit->data + size;
+            
+            best_fit->size_of_block = size;
+            best_fit->next_block = new_block;
 
-            if (prev_block)
-                prev_block->next_block = current_block->next_block;
-            else
-                free_list = current_block->next_block;
-
-            pthread_mutex_unlock(&memory_lock);
-            return current_block->data;
+            if (!prev_best) {
+                free_list = new_block; 
+            }
         }
 
-        prev_block = current_block;
-        current_block = current_block->next_block;
+        best_fit->is_free = 0;
+
+        void *result = best_fit->data;
+        pthread_mutex_unlock(&memory_lock);
+        return result;
     }
 
     pthread_mutex_unlock(&memory_lock);
@@ -90,52 +106,46 @@ void mem_free(void* block)
 {
     pthread_mutex_lock(&memory_lock);
 
-    if (!block || !memory_pool || !header_pool) {
-        pthread_mutex_unlock(&memory_lock);
-        return;
-    }
-
-    Block *block_to_free = (Block*)((char*)block - sizeof(Block));
-
-    if ((char*)block_to_free < header_pool || (char*)block_to_free >= header_pool + free_list->size_of_block) {
-        pthread_mutex_unlock(&memory_lock);
-        return;
-    }
-
-    if (block_to_free->is_free) {
-        pthread_mutex_unlock(&memory_lock);
-        return;
-    }
-
-    block_to_free->is_free = 1;
-
-    if (block_to_free->next_block && 
-        (char*)block_to_free->next_block < header_pool + free_list->size_of_block &&
-        block_to_free->next_block->is_free) 
+    if (!block || !memory_pool || !header_pool) 
     {
-        block_to_free->size_of_block += sizeof(Block) + block_to_free->next_block->size_of_block;
-        block_to_free->next_block = block_to_free->next_block->next_block;
+        pthread_mutex_unlock(&memory_lock);
+        return;
     }
 
+    // Find the corresponding Block in the header_pool
+    Block *block_to_free = NULL;
     Block *current = free_list;
     Block *prev = NULL;
 
-    while (current && current < block_to_free) {
+    while (current) {
+        if (current->data == block) {
+            block_to_free = current;
+            break;
+        }
         prev = current;
         current = current->next_block;
     }
 
-    if (prev) {
-        if ((char*)prev + sizeof(Block) + prev->size_of_block == (char*)block_to_free) {
-            prev->size_of_block += sizeof(Block) + block_to_free->size_of_block;
-            prev->next_block = block_to_free->next_block;
-        } else {
-            block_to_free->next_block = prev->next_block;
-            prev->next_block = block_to_free;
-        }
-    } else {
-        block_to_free->next_block = free_list;
-        free_list = block_to_free;
+    if (!block_to_free) {
+        // Block not found in our managed memory
+        pthread_mutex_unlock(&memory_lock);
+        return;
+    }
+
+    // Mark the block as free
+    block_to_free->is_free = 1;
+
+    // Merge with next block if it's free
+    if (block_to_free->next_block && block_to_free->next_block->is_free) {
+        block_to_free->size_of_block += block_to_free->next_block->size_of_block;
+        block_to_free->next_block = block_to_free->next_block->next_block;
+    }
+
+    // Merge with previous block if it's free
+    if (prev && prev->is_free) {
+        prev->size_of_block += block_to_free->size_of_block;
+        prev->next_block = block_to_free->next_block;
+        block_to_free = prev;
     }
 
     pthread_mutex_unlock(&memory_lock);
